@@ -16,8 +16,8 @@
   <header class="topbar">
     <div class="brand">📚 刷题宝</div>
     <nav class="nav">
-      <button class="nav-btn" data-view="courses">📖 课程</button>
-      <button class="nav-btn" data-view="bank">🗂️ 题库</button>
+      <button class="nav-btn" id="navCourses" data-view="courses">📖 课程</button>
+      <button class="nav-btn server-only" data-view="bank">🗂️ 题库</button>
       <button class="nav-btn" data-view="practice">✏️ 刷题</button>
     </nav>
     <div class="current-course" id="currentCourseBadge">未选择课程</div>
@@ -122,23 +122,25 @@
         <h1>开始刷题</h1>
         <p class="sub" id="practiceCourseName"></p>
 
-        <h3 class="pick-title">题目范围</h3>
-        <div class="mode-picker scope-picker">
-          <label class="mode-card scope-card">
-            <input type="radio" name="practiceScope" value="all" checked />
-            <span class="mode-name">全部题目 <span class="muted" id="scopeAllCount"></span></span>
-            <span class="mode-desc">学习通已确认 + 仅题库</span>
-          </label>
-          <label class="mode-card scope-card">
-            <input type="radio" name="practiceScope" value="verified" />
-            <span class="mode-name">仅学习通已确认 <span class="muted" id="scopeVerifiedCount"></span></span>
-            <span class="mode-desc">做题记录中出现过、答案有平台判定</span>
-          </label>
-          <label class="mode-card scope-card">
-            <input type="radio" name="practiceScope" value="unverified" />
-            <span class="mode-name">仅题库 <span class="muted" id="scopeUnverifiedCount"></span></span>
-            <span class="mode-desc">题库/参考文档独有，答案未验证</span>
-          </label>
+        <div class="server-only">
+          <h3 class="pick-title">题目范围</h3>
+          <div class="mode-picker scope-picker">
+            <label class="mode-card scope-card">
+              <input type="radio" name="practiceScope" value="all" checked />
+              <span class="mode-name">全部题目 <span class="muted" id="scopeAllCount"></span></span>
+              <span class="mode-desc">学习通已确认 + 仅题库</span>
+            </label>
+            <label class="mode-card scope-card">
+              <input type="radio" name="practiceScope" value="verified" />
+              <span class="mode-name">仅学习通已确认 <span class="muted" id="scopeVerifiedCount"></span></span>
+              <span class="mode-desc">做题记录中出现过、答案有平台判定</span>
+            </label>
+            <label class="mode-card scope-card">
+              <input type="radio" name="practiceScope" value="unverified" />
+              <span class="mode-name">仅题库 <span class="muted" id="scopeUnverifiedCount"></span></span>
+              <span class="mode-desc">题库/参考文档独有，答案未验证</span>
+            </label>
+          </div>
         </div>
 
         <h3 class="pick-title">出题顺序</h3>

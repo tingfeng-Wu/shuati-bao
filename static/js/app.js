@@ -2,6 +2,7 @@
 const STATIC_DATA = window.__STATIC_DATA__ || null;
 const STATIC = !!STATIC_DATA;
 const STATIC_BANKS = STATIC ? (STATIC_DATA.banks || {}) : {};
+const COURSE_WORD = STATIC ? '题库' : '课程';
 
 const state = {
   courses: [],
@@ -197,7 +198,9 @@ $$('.nav-btn').forEach(b => b.addEventListener('click', () => switchView(b.datas
 
 function updateCourseBadge() {
   const c = state.courses.find(c => c.id === state.currentCourseId);
-  $('#currentCourseBadge').textContent = c ? '当前课程：' + c.name : '未选择课程';
+  $('#currentCourseBadge').textContent = c
+    ? '当前' + COURSE_WORD + '：' + c.name
+    : '未选择' + COURSE_WORD;
 }
 
 function selectCourse(id) {
@@ -229,6 +232,11 @@ function renderCourses() {
   list.innerHTML = state.courses.map(c => {
     const ct = c.counts || calcCounts(STATIC_BANKS[c.id] || []);
     const current = c.id === state.currentCourseId;
+    const actions = STATIC
+      ? '<button class="btn primary small" data-act="practice">开始刷题</button>'
+      : `<button class="btn primary small" data-act="select">${current ? '✓ 当前课程' : '设为当前'}</button>
+         <button class="btn small" data-act="practice">开始刷题</button>
+         <button class="btn danger small" data-act="delete">删除</button>`;
     return `
     <div class="course-card ${current ? 'current' : ''}" data-id="${c.id}">
       <div class="name">${escapeHtml(c.name)}</div>
@@ -237,11 +245,7 @@ function renderCourses() {
         <b>✓ 学习通已确认 ${ct.verified}</b>
         <span class="bank-count">· 仅题库 ${ct.bank_only}</span>
       </div>
-      <div class="actions">
-        <button class="btn primary small" data-act="select">${current ? '✓ 当前课程' : '设为当前'}</button>
-        <button class="btn small" data-act="practice">开始刷题</button>
-        ${STATIC ? '' : '<button class="btn danger small" data-act="delete">删除</button>'}
-      </div>
+      <div class="actions">${actions}</div>
     </div>`;
   }).join('');
 
@@ -260,6 +264,10 @@ function renderCourses() {
         switchView('practice');
       } else {
         selectCourse(id);
+        if (STATIC) {
+          switchView('practice');
+          return;
+        }
         toast('已切换到：' + card.querySelector('.name').textContent);
       }
     });
@@ -615,20 +623,20 @@ async function loadPracticeStart() {
   if (!state.currentCourseId) {
     start.classList.remove('hidden');
     $('#practiceCourseName').textContent = '';
-    $('#practiceStats').innerHTML = '<div class="empty">请先在“课程”页选择课程。</div>';
+    $('#practiceStats').innerHTML = `<div class="empty">请先在“${STATIC ? '题库' : '课程'}”页选择${COURSE_WORD}。</div>`;
     return;
   }
   const course = state.courses.find(c => c.id === state.currentCourseId);
   const data = await api('/api/courses/' + state.currentCourseId + '/practice');
   if (!data.questions.length) {
     start.classList.remove('hidden');
-    $('#practiceCourseName').textContent = course ? '当前课程：' + course.name : '';
-    $('#practiceStats').innerHTML = '<div class="empty">该课程题库为空，请先导入题目。</div>';
+    $('#practiceCourseName').textContent = course ? '当前' + COURSE_WORD + '：' + course.name : '';
+    $('#practiceStats').innerHTML = '<div class="empty">该题库为空。</div>';
     return;
   }
   const c = data.counts;
   start.classList.remove('hidden');
-  $('#practiceCourseName').textContent = course ? '当前课程：' + course.name : '';
+  $('#practiceCourseName').textContent = course ? '当前' + COURSE_WORD + '：' + course.name : '';
   $('#scopeAllCount').textContent = `（${c.total} 题）`;
   $('#scopeVerifiedCount').textContent = `（${c.verified} 题）`;
   $('#scopeUnverifiedCount').textContent = `（${c.bank_only} 题）`;
@@ -854,8 +862,9 @@ function registerServiceWorker() {
 async function init() {
   document.body.classList.toggle('static-mode', STATIC);
   if (STATIC) {
-    $('#coursesTitle').textContent = '选择课程';
-    $('#coursesSub').textContent = '三套题库已按最新合订本整理；灰色题目为仅题库出现、未经学习通验证的题。';
+    $('#coursesTitle').textContent = '选择题库';
+    $('#coursesSub').textContent = '点一套题库开始刷题；灰色题目为仅题库出现、答案未经学习通验证的题。';
+    $('#navCourses').textContent = '📚 题库';
     $('#bankTitleText').textContent = '题库（只读）';
   }
   try {
@@ -863,11 +872,7 @@ async function init() {
   } catch (e) {
     console.error(e);
   }
-  if (STATIC && state.currentCourseId) {
-    switchView('practice');
-  } else {
-    switchView('courses');
-  }
+  switchView('courses');
   renderOptionEditor();
   registerServiceWorker();
 }
