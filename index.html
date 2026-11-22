@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#3b82f6" />
+  <meta name="description" content="刷题宝：园林艺术概论、民俗资源与旅游、管理学精要三套题库在线练习。" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>刷题宝 · 在线做题</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="static/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="static/icons/icon-192.png" />
+  <link rel="stylesheet" href="static/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📚 刷题宝</div>
+    <nav class="nav">
+      <button class="nav-btn" data-view="courses">📖 课程</button>
+      <button class="nav-btn" data-view="bank">🗂️ 题库</button>
+      <button class="nav-btn" data-view="practice">✏️ 刷题</button>
+    </nav>
+    <div class="current-course" id="currentCourseBadge">未选择课程</div>
+  </header>
+
+  <main class="container">
+
+    <!-- ============ 课程管理 ============ -->
+    <section id="view-courses" class="view">
+      <div class="panel">
+        <h1 id="coursesTitle">课程管理</h1>
+        <p class="sub" id="coursesSub">不同课程（科目）的题库相互独立，切换不会弄混。</p>
+        <div class="row server-only">
+          <input type="text" id="newCourseName" placeholder="输入课程名称，例如：计算机网络" />
+          <button class="btn primary" id="btnAddCourse">＋ 新建课程</button>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="dot verified"></span>学习通已确认：做题记录中出现过，答案经学习通判定</span>
+          <span class="legend-item"><span class="dot bank"></span>仅题库：只在题库/参考文档中出现，答案未经学习通验证</span>
+        </div>
+      </div>
+      <div id="courseList" class="course-list"></div>
+    </section>
+
+    <!-- ============ 题库管理 ============ -->
+    <section id="view-bank" class="view">
+      <div class="panel">
+        <h1 id="bankTitle"><span id="bankTitleText">题库管理</span> <span class="muted" id="bankCourseName"></span></h1>
+        <p class="sub static-only">只读模式：题库已按最新合订本整理，题目来源标记已固定。</p>
+        <div class="stats" id="bankStats"></div>
+        <div class="legend">
+          <span class="legend-item"><span class="dot verified"></span>学习通已确认</span>
+          <span class="legend-item"><span class="dot bank"></span>仅题库（未验证）</span>
+          <span class="legend-item"><span class="dot corrected"></span>答案已订正</span>
+        </div>
+        <div class="filter-row" id="bankFilter">
+          <button class="filter-btn active" data-filter="all">全部</button>
+          <button class="filter-btn" data-filter="verified">学习通已确认</button>
+          <button class="filter-btn" data-filter="unverified">仅题库</button>
+        </div>
+      </div>
+
+      <div class="panel server-only">
+        <h2>📥 导入题库（Word / PDF / JSON）</h2>
+        <div class="row wrap">
+          <label class="file-btn">
+            <input type="file" id="importFile" accept=".docx,.doc,.pdf,.json" />
+            选择文件（.docx / .pdf / .json）
+          </label>
+          <span id="importFileName" class="muted"></span>
+        </div>
+        <div class="row wrap">
+          <label class="radio"><input type="radio" name="importMode" value="append" checked /> 追加到当前题库</label>
+          <label class="radio"><input type="radio" name="importMode" value="replace" /> 覆盖当前题库（清空后导入）</label>
+          <button class="btn primary" id="btnImport">开始导入</button>
+        </div>
+        <div id="importResult" class="import-result"></div>
+        <details class="fmt-help">
+          <summary>查看 Word 题库格式说明</summary>
+          <pre id="fmtHelpText"></pre>
+        </details>
+      </div>
+
+      <div class="panel server-only">
+        <h2>➕ 手动添加题目</h2>
+        <div class="form">
+          <div class="row">
+            <label>题型</label>
+            <select id="qType">
+              <option value="single">单选题</option>
+              <option value="multiple">多选题</option>
+              <option value="judge">判断题</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>题干</label>
+            <textarea id="qStem" rows="2" placeholder="请输入题目内容"></textarea>
+          </div>
+          <div id="qOptionsArea"></div>
+          <div id="qJudgeArea" class="row hidden">
+            <label>答案</label>
+            <label class="radio"><input type="radio" name="judgeAnswer" value="0" checked /> 正确（对）</label>
+            <label class="radio"><input type="radio" name="judgeAnswer" value="1" /> 错误（错）</label>
+          </div>
+          <div class="row">
+            <label>解析（可选）</label>
+            <textarea id="qExplanation" rows="2" placeholder="答案解析，可留空"></textarea>
+          </div>
+          <button class="btn primary" id="btnAddQuestion">保存题目</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📚 题目列表 <button class="btn danger small server-only" id="btnClearBank">清空题库</button></h2>
+        <div id="questionList" class="question-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 刷题 ============ -->
+    <section id="view-practice" class="view">
+      <div id="practiceStart" class="panel center hidden">
+        <h1>开始刷题</h1>
+        <p class="sub" id="practiceCourseName"></p>
+
+        <h3 class="pick-title">题目范围</h3>
+        <div class="mode-picker scope-picker">
+          <label class="mode-card scope-card">
+            <input type="radio" name="practiceScope" value="all" checked />
+            <span class="mode-name">全部题目 <span class="muted" id="scopeAllCount"></span></span>
+            <span class="mode-desc">学习通已确认 + 仅题库</span>
+          </label>
+          <label class="mode-card scope-card">
+            <input type="radio" name="practiceScope" value="verified" />
+            <span class="mode-name">仅学习通已确认 <span class="muted" id="scopeVerifiedCount"></span></span>
+            <span class="mode-desc">做题记录中出现过、答案有平台判定</span>
+          </label>
+          <label class="mode-card scope-card">
+            <input type="radio" name="practiceScope" value="unverified" />
+            <span class="mode-name">仅题库 <span class="muted" id="scopeUnverifiedCount"></span></span>
+            <span class="mode-desc">题库/参考文档独有，答案未验证</span>
+          </label>
+        </div>
+
+        <h3 class="pick-title">出题顺序</h3>
+        <div class="mode-picker">
+          <label class="mode-card">
+            <input type="radio" name="practiceMode" value="shuffle" checked />
+            <span class="mode-name">🔀 乱序模式</span>
+            <span class="mode-desc">单选 → 多选 → 判断，每类内部随机打乱</span>
+          </label>
+          <label class="mode-card">
+            <input type="radio" name="practiceMode" value="order" />
+            <span class="mode-name">📋 顺序模式</span>
+            <span class="mode-desc">按题库原顺序出题，不打乱</span>
+          </label>
+        </div>
+
+        <div class="stats" id="practiceStats"></div>
+        <button class="btn primary big" id="btnStartPractice">开始刷题</button>
+      </div>
+
+      <div id="practiceQuiz" class="panel hidden">
+        <div class="quiz-head">
+          <div class="progress">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="quiz-meta">
+            <span class="badge" id="quizTypeBadge"></span>
+            <span id="quizSourceBadge" class="source-badges"></span>
+            <span class="muted" id="quizCounter"></span>
+          </div>
+        </div>
+        <div id="quizSourceNote" class="source-note hidden"></div>
+        <div class="stem" id="quizStem"></div>
+        <div class="options" id="quizOptions"></div>
+        <div id="quizHint" class="hint hidden"></div>
+        <div id="quizFeedback" class="feedback hidden"></div>
+        <div class="quiz-actions">
+          <button class="btn primary" id="btnConfirm" hidden>确认答案</button>
+          <button class="btn primary" id="btnNext" hidden>下一题 →</button>
+        </div>
+      </div>
+
+      <div id="practiceResult" class="panel center hidden">
+        <h1>🎉 刷题完成</h1>
+        <div class="result-score" id="resultScore"></div>
+        <div class="stats" id="resultStats"></div>
+        <div id="resultWrong" class="wrong-review"></div>
+        <div class="row center">
+          <button class="btn primary" id="btnAgain">再刷一次</button>
+          <button class="btn" id="btnBackPractice">返回</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 更正答案弹窗 -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>更正题目</h2>
+        <button class="modal-close" id="btnCloseEdit">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form">
+          <div class="row">
+            <label>题干</label>
+            <div id="editStem" class="edit-stem"></div>
+          </div>
+          <div id="editOptionsArea"></div>
+          <div id="editJudgeArea" class="row hidden">
+            <label>答案</label>
+            <label class="radio"><input type="radio" name="editJudgeAnswer" value="0" /> 正确（对）</label>
+            <label class="radio"><input type="radio" name="editJudgeAnswer" value="1" /> 错误（错）</label>
+          </div>
+          <div class="row">
+            <label>解析</label>
+            <textarea id="editExplanation" rows="2" placeholder="答案解析，可留空"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelEdit">取消</button>
+        <button class="btn primary" id="btnSaveEdit">保存更正</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="static/data.js"></script>
+  <script src="static/js/app.js"></script>
+</body>
+</html>

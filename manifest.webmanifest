@@ -1,0 +1,26 @@
+{
+  "name": "刷题宝 · 三套题库",
+  "short_name": "刷题宝",
+  "description": "园林艺术概论、民俗资源与旅游、管理学精要三套题库在线练习",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f5f9",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
