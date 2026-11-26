@@ -119,7 +119,7 @@
     <!-- ============ 刷题 ============ -->
     <section id="view-practice" class="view">
       <div id="practiceStart" class="panel center hidden">
-        <h1>开始刷题</h1>
+        <h1 id="practiceTitle">开始刷题</h1>
         <p class="sub" id="practiceCourseName"></p>
 
         <div class="server-only">
@@ -155,7 +155,14 @@
             <span class="mode-name">📋 顺序模式</span>
             <span class="mode-desc">按题库原顺序出题，不打乱</span>
           </label>
+          <label class="mode-card">
+            <input type="radio" name="practiceMode" value="exam" />
+            <span class="mode-name">📝 模拟考试</span>
+            <span class="mode-desc">随机抽题：单选 40 · 多选 20 · 判断 20，选项乱序</span>
+          </label>
         </div>
+
+        <div id="examInfo" class="exam-info hidden"></div>
 
         <div class="stats" id="practiceStats"></div>
         <button class="btn primary big" id="btnStartPractice">开始刷题</button>
@@ -180,21 +187,24 @@
         <div class="quiz-actions">
           <button class="btn" id="btnPrev" hidden>← 上一题</button>
           <button class="btn warn" id="btnSkip" hidden>不清楚</button>
+          <button class="btn" id="btnSheet" hidden>📋 答题卡</button>
           <button class="btn primary" id="btnConfirm" hidden>确认答案</button>
           <button class="btn warn" id="btnGuessed" hidden>我蒙的</button>
           <button class="btn primary" id="btnNext" hidden>下一题 →</button>
+          <button class="btn warn" id="btnSubmitExam" hidden>交卷</button>
         </div>
       </div>
 
       <div id="practiceResult" class="panel center hidden">
-        <h1>🎉 刷题完成</h1>
+        <h1 id="resultTitle">🎉 刷题完成</h1>
         <div class="result-score" id="resultScore"></div>
         <div class="stats" id="resultStats"></div>
-        <div id="resultWrong" class="wrong-review"></div>
         <div class="row center">
           <button class="btn primary" id="btnAgain">再刷一次</button>
+          <button class="btn" id="btnReviewSheet" hidden>📋 查看答题卡</button>
           <button class="btn" id="btnBackPractice">返回</button>
         </div>
+        <div id="resultWrong" class="wrong-review"></div>
       </div>
     </section>
 
@@ -228,6 +238,25 @@
       <div class="modal-footer">
         <button class="btn" id="btnCancelEdit">取消</button>
         <button class="btn primary" id="btnSaveEdit">保存更正</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 答题卡弹窗 -->
+  <div id="sheetModal" class="modal hidden">
+    <div class="modal-content sheet-modal">
+      <div class="modal-header">
+        <h2>📋 答题卡</h2>
+        <button class="modal-close" id="btnCloseSheet">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="sheetSummary" class="sheet-summary"></div>
+        <div id="sheetBody"></div>
+        <div id="sheetDetail" class="sheet-detail hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnResumeExam">继续答题</button>
+        <button class="btn primary" id="btnSubmitSheet">交卷</button>
       </div>
     </div>
   </div>

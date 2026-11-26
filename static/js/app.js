@@ -8,10 +8,13 @@ const state = {
   courses: [],
   currentCourseId: localStorage.getItem('currentCourseId') || null,
   questions: [],
+  practiceQuestions: [],
   bankFilter: 'all',
   // 刷题会话
   session: null,      // { questions: [], index: 0, records: [] }
 };
+
+const EXAM_RULES = { single: 40, multiple: 20, judge: 20, multipleScore: 40 };
 
 const TYPE_LABEL = { single: '单选题', multiple: '多选题', judge: '判断题' };
 const TYPE_BADGE = { single: 'single', multiple: 'multiple', judge: 'judge' };
@@ -85,6 +88,57 @@ function shuffleCopy(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+/* ========== 模拟考试 ========== */
+function filterByScope(questions, scope) {
+  return questions.filter(q => (
+    scope === 'verified' ? q.verified
+      : scope === 'unverified' ? !q.verified
+        : true
+  ));
+}
+
+function formatPoints(n) {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+function examPlanFor(questions) {
+  const c = calcCounts(questions);
+  const single = Math.min(EXAM_RULES.single, c.single);
+  const multiple = Math.min(EXAM_RULES.multiple, c.multiple);
+  const judge = Math.min(EXAM_RULES.judge, c.judge);
+  const perMultiple = multiple ? EXAM_RULES.multipleScore / multiple : 0;
+  return {
+    single, multiple, judge, perMultiple,
+    total: single + judge + (multiple ? EXAM_RULES.multipleScore : 0),
+  };
+}
+
+// 选项乱序的题目副本：答案索引随选项一起重映射（判断题为“正确/错误”，保持固定顺序）
+function examQuestionCopy(q) {
+  if (q.type === 'judge') {
+    return { ...q, options: q.options.slice(), answer: q.answer.slice() };
+  }
+  const entries = q.options.map((text, i) => ({ text, correct: q.answer.includes(i) }));
+  const shuffled = shuffleCopy(entries);
+  return {
+    ...q,
+    options: shuffled.map(e => e.text),
+    answer: shuffled.map((e, i) => (e.correct ? i : -1)).filter(i => i >= 0),
+  };
+}
+
+function buildExamPaper(pool) {
+  const groups = { single: [], multiple: [], judge: [] };
+  pool.forEach(q => { if (groups[q.type]) groups[q.type].push(q); });
+  const picked = [];
+  for (const t of ['single', 'multiple', 'judge']) {
+    picked.push(...shuffleCopy(groups[t]).slice(0, EXAM_RULES[t]));
+  }
+  const questions = picked.map(examQuestionCopy);
+  const plan = examPlanFor(questions);
+  return { questions, plan };
 }
 
 /* ========== 静态版适配器 ========== */
@@ -619,6 +673,9 @@ $('#btnSaveEdit').addEventListener('click', async () => {
 async function loadPracticeStart() {
   const start = $('#practiceStart'), quiz = $('#practiceQuiz'), result = $('#practiceResult');
   quiz.classList.add('hidden'); result.classList.add('hidden');
+  state.practiceQuestions = [];
+  $('#examInfo').classList.add('hidden');
+  updateExamInfo();
   if (!state.currentCourseId) {
     start.classList.remove('hidden');
     $('#practiceCourseName').textContent = '';
@@ -627,6 +684,7 @@ async function loadPracticeStart() {
   }
   const course = state.courses.find(c => c.id === state.currentCourseId);
   const data = await api('/api/courses/' + state.currentCourseId + '/practice');
+  state.practiceQuestions = data.questions;
   if (!data.questions.length) {
     start.classList.remove('hidden');
     $('#practiceCourseName').textContent = course ? '当前' + COURSE_WORD + '：' + course.name : '';
@@ -658,19 +716,66 @@ async function loadPracticeStart() {
     <div class="stat"><div class="num">${c.judge}</div><div class="label">判断题</div></div>
     <div class="stat"><div class="num" style="color:var(--green)">${c.verified}</div><div class="label">学习通已确认</div></div>
     <div class="stat"><div class="num" style="color:var(--gray-text)">${c.bank_only}</div><div class="label">仅题库</div></div>`;
+  updateExamInfo();
 }
+
+function updateExamInfo() {
+  const info = $('#examInfo');
+  const modeChecked = document.querySelector('input[name="practiceMode"]:checked');
+  const scopeChecked = document.querySelector('input[name="practiceScope"]:checked');
+  const scope = scopeChecked ? scopeChecked.value : 'all';
+  const isExam = modeChecked && modeChecked.value === 'exam';
+  $('#btnStartPractice').textContent = isExam ? '开始考试' : '开始刷题';
+  $('#practiceTitle').textContent = isExam ? '模拟考试' : '开始刷题';
+  if (!isExam || !state.practiceQuestions.length) {
+    info.classList.add('hidden');
+    return;
+  }
+  const plan = examPlanFor(filterByScope(state.practiceQuestions, scope));
+  if (!plan.single && !plan.multiple && !plan.judge) {
+    info.classList.remove('hidden');
+    info.innerHTML = '该范围内没有可出题的题目。';
+    return;
+  }
+  const parts = [];
+  if (plan.single) parts.push(`<b>单选 ${plan.single} 题 × 1 分</b>`);
+  if (plan.multiple) parts.push(`<b>多选 ${plan.multiple} 题 × ${formatPoints(plan.perMultiple)} 分</b>`);
+  if (plan.judge) parts.push(`<b>判断 ${plan.judge} 题 × 1 分</b>`);
+  const notes = [];
+  if (plan.multiple && plan.multiple < EXAM_RULES.multiple) {
+    notes.push(`本范围多选共 ${plan.multiple} 道，全部抽入，每题 ${formatPoints(plan.perMultiple)} 分（多选合计 40 分）。`);
+  }
+  if (!plan.single) notes.push('本范围没有单选题。');
+  if (!plan.multiple) notes.push('本范围没有多选题。');
+  if (!plan.judge) notes.push('本范围没有判断题。');
+  info.innerHTML =
+    `随机抽题：${parts.join(' · ')}，<span class="exam-total">满分 ${plan.total} 分</span>。` +
+    '<br>单选/多选选项顺序随机打乱；考试中不显示对错，交卷后统一评分；多选错选、漏选均不得分。' +
+    notes.map(n => '<br>' + n).join('');
+  info.classList.remove('hidden');
+}
+
+$$('input[name="practiceMode"]').forEach(r => r.addEventListener('change', updateExamInfo));
+$$('input[name="practiceScope"]').forEach(r => r.addEventListener('change', updateExamInfo));
 
 $('#btnStartPractice').addEventListener('click', async () => {
   const checked = document.querySelector('input[name="practiceMode"]:checked');
   const mode = checked ? checked.value : 'shuffle';
   const scopeChecked = document.querySelector('input[name="practiceScope"]:checked');
   const scope = scopeChecked ? scopeChecked.value : 'all';
+
+  if (mode === 'exam') {
+    startExam(scope);
+    return;
+  }
+
   const data = await api('/api/courses/' + state.currentCourseId + '/practice?mode=' + mode + '&scope=' + scope);
   if (!data.questions.length) {
     return toast(scope === 'verified' ? '该课程没有学习通已确认的题目'
       : scope === 'unverified' ? '该课程没有仅题库的题目' : '题库为空');
   }
   state.session = {
+    exam: false,
     questions: data.questions,
     index: 0,
     scope,
@@ -679,8 +784,27 @@ $('#btnStartPractice').addEventListener('click', async () => {
   $('#practiceStart').classList.add('hidden');
   $('#practiceResult').classList.add('hidden');
   $('#practiceQuiz').classList.remove('hidden');
+  window.scrollTo(0, 0);
   renderQuestion();
 });
+
+function startExam(scope) {
+  const paper = buildExamPaper(filterByScope(state.practiceQuestions, scope));
+  if (!paper.questions.length) return toast('该范围内没有可出题的题目');
+  state.session = {
+    exam: true,
+    questions: paper.questions,
+    plan: paper.plan,
+    index: 0,
+    scope,
+    records: paper.questions.map(() => ({ selected: null, skipped: false, guessed: false })),
+  };
+  $('#practiceStart').classList.add('hidden');
+  $('#practiceResult').classList.add('hidden');
+  $('#practiceQuiz').classList.remove('hidden');
+  window.scrollTo(0, 0);
+  renderExamQuestion();
+}
 
 function currentQuestion() {
   return state.session.questions[state.session.index];
@@ -728,6 +852,8 @@ function renderFeedback(q, r) {
 
 function updateQuizButtons(q, r, answered) {
   const s = state.session;
+  $('#btnSheet').hidden = true;
+  $('#btnSubmitExam').hidden = true;
   $('#btnPrev').hidden = s.index === 0;
   if (answered) {
     $('#btnSkip').hidden = true;
@@ -810,6 +936,262 @@ function renderQuestion() {
   updateQuizButtons(q, r, answered);
 }
 
+/* ---------- 模拟考试作答 ---------- */
+function renderExamQuestion() {
+  const s = state.session;
+  const q = s.questions[s.index];
+  const r = s.records[s.index];
+  const answeredCount = s.records.filter(x => x.selected !== null).length;
+
+  const typeEl = $('#quizTypeBadge');
+  typeEl.className = `badge ${TYPE_BADGE[q.type]}`;
+  typeEl.textContent = TYPE_LABEL[q.type];
+  const points = q.type === 'multiple' ? s.plan.perMultiple : 1;
+  $('#quizSourceBadge').innerHTML = `<span class="badge bank">本题 ${formatPoints(points)} 分</span>`;
+  $('#quizCounter').textContent = `第 ${s.index + 1} / ${s.questions.length} 题 · 已答 ${answeredCount}`;
+  $('#progressBar').style.width = ((s.index) / s.questions.length * 100) + '%';
+
+  const note = $('#quizSourceNote');
+  note.className = 'source-note hidden';
+  note.textContent = '';
+
+  $('#quizStem').className = 'stem';
+  let stem = `${s.index + 1}. ` + escapeHtml(q.stem);
+  if (q.type === 'multiple') stem += '<span class="hint" style="display:inline-block;margin-left:8px">（多选题）</span>';
+  $('#quizStem').innerHTML = stem;
+
+  const selected = new Set(r.selected || []);
+  const optionsEl = $('#quizOptions');
+  optionsEl.innerHTML = q.options.map((opt, i) => `
+    <div class="option ${selected.has(i) ? 'selected' : ''}" data-i="${i}">
+      <span class="opt-key">${OPT_KEYS[i]}</span>
+      <span class="opt-text">${escapeHtml(opt)}</span>
+      <span class="opt-mark"></span>
+    </div>`).join('');
+  optionsEl.querySelectorAll('.option').forEach(opt => {
+    opt.addEventListener('click', () => toggleExamOption(parseInt(opt.dataset.i)));
+  });
+
+  const hint = $('#quizHint');
+  hint.textContent = q.type === 'multiple'
+    ? '多选题：可选择多个选项，再次点击可取消；交卷后统一评分，错选、漏选均不得分'
+    : '点击选项作答，可随时修改；交卷后统一评分';
+  hint.classList.remove('hidden');
+
+  const feedback = $('#quizFeedback');
+  feedback.className = 'feedback hidden';
+  feedback.innerHTML = '';
+
+  updateExamButtons();
+}
+
+function toggleExamOption(i) {
+  const s = state.session;
+  const q = s.questions[s.index];
+  const r = s.records[s.index];
+  if (q.type === 'multiple') {
+    const set = new Set(r.selected || []);
+    if (set.has(i)) set.delete(i); else set.add(i);
+    r.selected = set.size ? Array.from(set).sort((a, b) => a - b) : null;
+  } else {
+    r.selected = [i];
+  }
+  renderExamQuestion();
+}
+
+function updateExamButtons() {
+  const s = state.session;
+  $('#btnSkip').hidden = true;
+  $('#btnConfirm').hidden = true;
+  $('#btnGuessed').hidden = true;
+  $('#btnSheet').hidden = false;
+  $('#btnSubmitExam').hidden = false;
+  $('#btnPrev').hidden = s.index === 0;
+  $('#btnNext').hidden = false;
+  $('#btnNext').textContent = s.index === s.questions.length - 1 ? '完成并交卷' : '下一题 →';
+}
+
+function openSheet(mode = 'exam') {
+  const s = state.session;
+  if (!s || !s.exam) return;
+  const review = mode === 'review';
+  const total = s.questions.length;
+  const answered = s.records.filter(r => r.selected !== null).length;
+  const rightCount = review
+    ? s.questions.filter((q, i) => recordIsRight(q, s.records[i])).length
+    : 0;
+
+  if (review) {
+    $('#sheetSummary').innerHTML =
+      `答对 <b style="color:var(--green)">${rightCount}</b> 题 · 答错 <b style="color:var(--red)">${total - rightCount}</b> 题` +
+      `<div class="sheet-hint">绿色为答对，红色为答错或未答；点击题号查看该题的作答详情。</div>`;
+  } else {
+    $('#sheetSummary').innerHTML = `已答 <b>${answered}</b> / ${total} 题` +
+      (answered < total ? `，还有 <b>${total - answered}</b> 题未答` : '，全部作答完毕');
+  }
+
+  const sections = [['single', '单选题'], ['multiple', '多选题'], ['judge', '判断题']];
+  $('#sheetBody').innerHTML = sections.map(([key, label]) => {
+    const idxs = s.questions.map((q, i) => (q.type === key ? i : -1)).filter(i => i >= 0);
+    if (!idxs.length) return '';
+    const done = idxs.filter(i => s.records[i].selected !== null).length;
+    const doneText = review
+      ? `${idxs.filter(i => recordIsRight(s.questions[i], s.records[i])).length}/${idxs.length} 答对`
+      : `${done}/${idxs.length} 已答`;
+    const cells = idxs.map(i => {
+      const isRight = review && recordIsRight(s.questions[i], s.records[i]);
+      const cls = [
+        'sheet-cell',
+        review ? (isRight ? 'correct' : 'wrong') : (s.records[i].selected !== null ? 'answered' : ''),
+        !review && i === s.index ? 'current' : '',
+      ].filter(Boolean).join(' ');
+      return `<button class="${cls}" data-i="${i}">${i + 1}</button>`;
+    }).join('');
+    return `<div class="sheet-group">
+      <div class="sheet-group-head"><b>${label}</b><span>${doneText}</span></div>
+      <div class="sheet-grid">${cells}</div>
+    </div>`;
+  }).join('');
+
+  $('#sheetBody').querySelectorAll('.sheet-cell').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.dataset.i);
+      if (review) {
+        renderSheetDetail(i, btn);
+        return;
+      }
+      s.index = i;
+      closeSheet();
+      renderExamQuestion();
+      window.scrollTo(0, 0);
+    });
+  });
+
+  $('#sheetDetail').classList.add('hidden');
+  $('#sheetDetail').innerHTML = '';
+  $('#btnResumeExam').textContent = review ? '关闭' : '继续答题';
+  $('#btnSubmitSheet').hidden = review;
+  $('#sheetModal').classList.remove('hidden');
+  $('#sheetModal .modal-body').scrollTop = 0;
+}
+
+function renderSheetDetail(i, cell) {
+  const s = state.session;
+  const q = s.questions[i];
+  const r = s.records[i];
+  const right = recordIsRight(q, r);
+  const selected = new Set(r.selected || []);
+  const points = q.type === 'multiple' ? s.plan.perMultiple : 1;
+
+  const opts = q.options.map((text, j) => {
+    const isCorrect = q.answer.includes(j);
+    const picked = selected.has(j);
+    const cls = isCorrect ? 'correct' : picked ? 'wrong' : 'dim';
+    const mark = isCorrect ? '✓' : picked ? '✗' : '';
+    return `<div class="sd-opt ${cls}">
+      <span class="sd-key">${OPT_KEYS[j]}</span>
+      <span>${escapeHtml(text)}</span>
+      <span class="sd-mark">${mark}</span>
+    </div>`;
+  }).join('');
+
+  let yourText;
+  if (r.selected && r.selected.length) {
+    yourText = q.type === 'judge'
+      ? (r.selected[0] === 0 ? '正确' : '错误')
+      : r.selected.map(x => `${OPT_KEYS[x]}.${q.options[x] || ''}`).join('、');
+  } else {
+    yourText = '（未作答）';
+  }
+
+  const el = $('#sheetDetail');
+  el.innerHTML = `
+    <div class="sd-head">
+      <span class="badge ${TYPE_BADGE[q.type]}">${TYPE_LABEL[q.type]}</span>
+      <span class="badge ${right ? 'ok' : 'bad'}">${right ? '答对' : '答错'}</span>
+      <span class="sd-score">得分 ${right ? formatPoints(points) : 0} / ${formatPoints(points)}</span>
+    </div>
+    <div class="sd-stem">${i + 1}. ${escapeHtml(q.stem)}</div>
+    <div class="sd-options">${opts}</div>
+    <div class="sd-answer">
+      你的答案：<b class="${right ? 'ok' : 'bad'}">${escapeHtml(yourText)}</b>
+      　｜　正确答案：<b class="ok">${answerTextWithContent(q)}</b>
+      ${q.explanation ? '<div class="sd-explain">解析：' + escapeHtml(q.explanation) + '</div>' : ''}
+    </div>`;
+  el.classList.remove('hidden');
+  $$('#sheetBody .sheet-cell').forEach(c => c.classList.toggle('active', c === cell));
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeSheet() {
+  $('#sheetModal').classList.add('hidden');
+}
+
+function submitExam() {
+  const s = state.session;
+  if (!s || !s.exam) return;
+  const unanswered = s.records.filter(r => r.selected === null).length;
+  if (unanswered && !confirm(`还有 ${unanswered} 题未作答，确定交卷吗？未作答按错误计分。`)) return;
+  closeSheet();
+  showExamResult();
+}
+
+function showExamResult() {
+  const s = state.session;
+  window.scrollTo(0, 0);
+  $('#practiceQuiz').classList.add('hidden');
+  const resultEl = $('#practiceResult');
+  resultEl.classList.remove('hidden');
+
+  const perType = { single: { total: 0, right: 0 }, multiple: { total: 0, right: 0 }, judge: { total: 0, right: 0 } };
+  const wrongItems = [];
+  let score = 0;
+  s.questions.forEach((q, i) => {
+    perType[q.type].total++;
+    if (recordIsRight(q, s.records[i])) {
+      perType[q.type].right++;
+      score += q.type === 'multiple' ? s.plan.perMultiple : 1;
+    } else {
+      wrongItems.push({ q, r: s.records[i] });
+    }
+  });
+  score = Math.round(score * 10) / 10;
+  const multiScore = Math.round(perType.multiple.right * s.plan.perMultiple * 10) / 10;
+
+  $('#resultTitle').textContent = '📝 考试结束';
+  $('#resultScore').innerHTML = `${formatPoints(score)} <small>/ ${s.plan.total} 分</small>`;
+  $('#resultStats').innerHTML = [
+    `<div class="stat"><div class="num">${perType.single.right}/${perType.single.total}</div><div class="label">单选 · ${perType.single.right} 分</div></div>`,
+    `<div class="stat"><div class="num">${perType.multiple.right}/${perType.multiple.total}</div><div class="label">多选 · ${formatPoints(multiScore)} 分</div></div>`,
+    `<div class="stat"><div class="num">${perType.judge.right}/${perType.judge.total}</div><div class="label">判断 · ${perType.judge.right} 分</div></div>`,
+  ].join('');
+
+  const wrongEl = $('#resultWrong');
+  if (!wrongItems.length) {
+    wrongEl.innerHTML = '<div class="empty">全部答对，满分！🎉</div>';
+  } else {
+    wrongEl.innerHTML = `<h3>错题回顾（${wrongItems.length} 题）</h3>` + wrongItems.map(({ q, r }, i) => {
+      const yourText = r.selected && r.selected.length
+        ? q.type === 'judge'
+          ? (r.selected[0] === 0 ? '正确' : '错误')
+          : r.selected.map(x => `${OPT_KEYS[x]}.${q.options[x] || ''}`).join('、')
+        : '（未作答）';
+      return `
+      <div class="wr-item ${q.verified ? '' : 'unverified'}">
+        <div class="q-meta">${typeBadge(q.type)} ${sourceBadges(q)}</div>
+        <div class="wr-stem">${i + 1}. ${escapeHtml(q.stem)}</div>
+        <div class="wr-detail">
+          你的答案：${escapeHtml(yourText)}
+          ｜ 正确答案：<b style="color:#16a34a">${answerTextWithContent(q)}</b>
+          ${q.explanation ? '<br>解析：' + escapeHtml(q.explanation) : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  $('#btnAgain').textContent = '再考一次';
+  $('#btnReviewSheet').hidden = false;
+}
+
 $('#btnConfirm').addEventListener('click', () => {
   const r = currentRecord();
   if (r.selected !== null || r.skipped) return;
@@ -836,9 +1218,21 @@ $('#btnPrev').addEventListener('click', () => {
   const s = state.session;
   if (s.index > 0) {
     s.index--;
-    renderQuestion();
+    if (s.exam) {
+      renderExamQuestion();
+      window.scrollTo(0, 0);
+    } else {
+      renderQuestion();
+    }
   }
 });
+
+$('#btnSheet').addEventListener('click', () => openSheet('exam'));
+$('#btnReviewSheet').addEventListener('click', () => openSheet('review'));
+$('#btnSubmitExam').addEventListener('click', submitExam);
+$('#btnCloseSheet').addEventListener('click', closeSheet);
+$('#btnResumeExam').addEventListener('click', closeSheet);
+$('#btnSubmitSheet').addEventListener('click', submitExam);
 
 function submitAnswer(selected) {
   const r = currentRecord();
@@ -849,6 +1243,15 @@ function submitAnswer(selected) {
 
 $('#btnNext').addEventListener('click', () => {
   const s = state.session;
+  if (s.exam) {
+    if (s.index >= s.questions.length - 1) submitExam();
+    else {
+      s.index++;
+      renderExamQuestion();
+      window.scrollTo(0, 0);
+    }
+    return;
+  }
   if (s.index >= s.questions.length - 1) {
     showResult();
   } else {
@@ -859,6 +1262,7 @@ $('#btnNext').addEventListener('click', () => {
 
 function showResult() {
   const s = state.session;
+  window.scrollTo(0, 0);
   $('#practiceQuiz').classList.add('hidden');
   const resultEl = $('#practiceResult');
   resultEl.classList.remove('hidden');
@@ -878,6 +1282,9 @@ function showResult() {
   });
   const accuracy = total ? Math.round(right / total * 100) : 0;
 
+  $('#resultTitle').textContent = '🎉 刷题完成';
+  $('#btnAgain').textContent = '再刷一次';
+  $('#btnReviewSheet').hidden = true;
   $('#resultScore').innerHTML = `${right} <small>/ ${total} 题 · 正确率 ${accuracy}%</small>`;
   $('#resultStats').innerHTML = ['single', 'multiple', 'judge'].map(t => {
     const p = perType[t];
