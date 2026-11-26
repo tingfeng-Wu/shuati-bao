@@ -338,6 +338,7 @@ body.static-mode .course-card .actions .btn { flex: 1; padding: 10px 14px; }
 .feedback .explain b { color: var(--muted); }
 
 .quiz-actions { margin-top: 18px; display: flex; gap: 12px; }
+#btnConfirm, #btnNext { margin-left: auto; }
 .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
 
 /* 结果 */
@@ -562,7 +563,8 @@ body.static-mode .course-card .actions .btn { flex: 1; padding: 10px 14px; }
   .stem { font-size: 17px; }
   .option { padding: 14px; }
   .quiz-actions { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); z-index: 5; }
-  .quiz-actions .btn { flex: 1; }
+  .quiz-actions .btn { flex: 1; padding: 10px 8px; font-size: 14px; white-space: nowrap; }
+  #btnConfirm, #btnNext { margin-left: 0; }
   .question-item { flex-direction: column; }
   .question-item .q-actions { align-self: flex-end; }
   .source-badges { margin-left: 0; }
