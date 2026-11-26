@@ -10,8 +10,7 @@ const state = {
   questions: [],
   bankFilter: 'all',
   // 刷题会话
-  session: null,      // { questions: [], index: 0, rightCount, perType }
-  answered: false,
+  session: null,      // { questions: [], index: 0, records: [] }
 };
 
 const TYPE_LABEL = { single: '单选题', multiple: '多选题', judge: '判断题' };
@@ -674,12 +673,9 @@ $('#btnStartPractice').addEventListener('click', async () => {
   state.session = {
     questions: data.questions,
     index: 0,
-    rightCount: 0,
     scope,
-    perType: { single: { total: 0, right: 0 }, multiple: { total: 0, right: 0 }, judge: { total: 0, right: 0 } },
-    wrong: [],
+    records: data.questions.map(() => ({ selected: null, skipped: false, guessed: false })),
   };
-  data.questions.forEach(q => state.session.perType[q.type].total++);
   $('#practiceStart').classList.add('hidden');
   $('#practiceResult').classList.add('hidden');
   $('#practiceQuiz').classList.remove('hidden');
@@ -690,10 +686,68 @@ function currentQuestion() {
   return state.session.questions[state.session.index];
 }
 
+function currentRecord() {
+  return state.session.records[state.session.index];
+}
+
+function recordIsRight(q, r) {
+  if (r.skipped || r.guessed) return false;
+  if (!r.selected) return false;
+  const correctSet = new Set(q.answer);
+  return r.selected.length === q.answer.length && r.selected.every(i => correctSet.has(i));
+}
+
+function renderFeedback(q, r) {
+  const feedback = $('#quizFeedback');
+  if (r.skipped) {
+    feedback.className = 'feedback wrong';
+    feedback.innerHTML = `❓ 已标记为“不清楚”，正确答案：<b>${answerTextWithContent(q)}</b>`;
+  } else if (r.guessed) {
+    feedback.className = 'feedback wrong';
+    feedback.innerHTML = `😅 已标记为“我蒙的”并计入错题，正确答案：<b>${answerTextWithContent(q)}</b>`;
+  } else if (recordIsRight(q, r)) {
+    feedback.className = 'feedback right';
+    feedback.innerHTML = '✅ 回答正确！';
+  } else {
+    feedback.className = 'feedback wrong';
+    let hint = '';
+    if (q.type === 'multiple') {
+      const correctSet = new Set(q.answer);
+      const selectedSet = new Set(r.selected || []);
+      const missing = q.answer.filter(i => !selectedSet.has(i));
+      const extra = (r.selected || []).filter(i => !correctSet.has(i));
+      hint = '（' + (missing.length ? '漏选 ' + missing.map(i => OPT_KEYS[i]).join('') : '') +
+             (extra.length ? (missing.length ? '，' : '') + '多选 ' + extra.map(i => OPT_KEYS[i]).join('') : '') + '）';
+    }
+    feedback.innerHTML = `❌ 回答错误，正确答案：<b>${answerTextWithContent(q)}</b> ${hint}`;
+  }
+  if (q.explanation) {
+    feedback.innerHTML += `<div class="explain"><b>解析：</b>${escapeHtml(q.explanation)}</div>`;
+  }
+}
+
+function updateQuizButtons(q, r, answered) {
+  const s = state.session;
+  $('#btnPrev').hidden = s.index === 0;
+  if (answered) {
+    $('#btnSkip').hidden = true;
+    $('#btnConfirm').hidden = true;
+    $('#btnGuessed').hidden = !(recordIsRight(q, r) && !r.guessed);
+    $('#btnNext').hidden = false;
+  } else {
+    $('#btnSkip').hidden = false;
+    $('#btnConfirm').hidden = q.type !== 'multiple';
+    $('#btnGuessed').hidden = true;
+    $('#btnNext').hidden = true;
+  }
+  $('#btnNext').textContent = s.index === s.questions.length - 1 ? '查看结果 🎉' : '下一题 →';
+}
+
 function renderQuestion() {
   const q = currentQuestion();
   const s = state.session;
-  state.answered = false;
+  const r = currentRecord();
+  const answered = r.selected !== null || r.skipped;
 
   const typeEl = $('#quizTypeBadge');
   typeEl.className = `badge ${TYPE_BADGE[q.type]}`;
@@ -722,76 +776,75 @@ function renderQuestion() {
 
   const hint = $('#quizHint');
   const feedback = $('#quizFeedback');
-  feedback.className = 'feedback hidden';
-  feedback.innerHTML = '';
-  $('#btnConfirm').hidden = (q.type !== 'multiple');
-  $('#btnNext').hidden = true;
 
-  optionsEl.querySelectorAll('.option').forEach(opt => {
-    opt.addEventListener('click', () => {
-      if (state.answered) return;
-      if (q.type === 'multiple') {
-        opt.classList.toggle('selected');
-      } else {
-        submitAnswer([parseInt(opt.dataset.i)]);
-      }
+  if (answered) {
+    const correctSet = new Set(q.answer);
+    const selectedSet = new Set(r.selected || []);
+    optionsEl.querySelectorAll('.option').forEach(opt => {
+      const i = parseInt(opt.dataset.i);
+      opt.classList.add('locked');
+      if (correctSet.has(i)) opt.classList.add('correct');
+      else if (selectedSet.has(i)) opt.classList.add('wrong');
+      else opt.classList.add('dim');
     });
-  });
+    hint.classList.add('hidden');
+    renderFeedback(q, r);
+  } else {
+    feedback.className = 'feedback hidden';
+    feedback.innerHTML = '';
+    hint.textContent = q.type === 'multiple' ? '可选择多个答案，选好后点“确认答案”' : '点击选项即可作答';
+    hint.classList.remove('hidden');
+    optionsEl.querySelectorAll('.option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const r2 = currentRecord();
+        if (r2.selected !== null || r2.skipped) return;
+        if (q.type === 'multiple') {
+          opt.classList.toggle('selected');
+        } else {
+          submitAnswer([parseInt(opt.dataset.i)]);
+        }
+      });
+    });
+  }
 
-  hint.textContent = q.type === 'multiple' ? '可选择多个答案，选好后点“确认答案”' : '点击选项即可作答';
-  hint.classList.remove('hidden');
+  updateQuizButtons(q, r, answered);
 }
 
 $('#btnConfirm').addEventListener('click', () => {
-  if (state.answered) return;
+  const r = currentRecord();
+  if (r.selected !== null || r.skipped) return;
   const selected = $$('#quizOptions .option.selected').map(o => parseInt(o.dataset.i));
   if (!selected.length) return toast('请先选择答案');
   submitAnswer(selected);
 });
 
+$('#btnSkip').addEventListener('click', () => {
+  const r = currentRecord();
+  if (r.selected !== null || r.skipped) return;
+  r.skipped = true;
+  renderQuestion();
+});
+
+$('#btnGuessed').addEventListener('click', () => {
+  const r = currentRecord();
+  if (r.guessed) return;
+  r.guessed = true;
+  renderQuestion();
+});
+
+$('#btnPrev').addEventListener('click', () => {
+  const s = state.session;
+  if (s.index > 0) {
+    s.index--;
+    renderQuestion();
+  }
+});
+
 function submitAnswer(selected) {
-  const q = currentQuestion();
-  state.answered = true;
-
-  const correctSet = new Set(q.answer);
-  const selectedSet = new Set(selected);
-  const isRight = selected.length === q.answer.length && selected.every(i => correctSet.has(i));
-
-  // 渲染反馈
-  $$('#quizOptions .option').forEach(opt => {
-    const i = parseInt(opt.dataset.i);
-    opt.classList.add('locked');
-    if (correctSet.has(i)) opt.classList.add('correct');
-    else if (selectedSet.has(i)) opt.classList.add('wrong');
-    else opt.classList.add('dim');
-  });
-
-  const feedback = $('#quizFeedback');
-  if (isRight) {
-    state.session.rightCount++;
-    state.session.perType[q.type].right++;
-    feedback.className = 'feedback right';
-    feedback.innerHTML = '✅ 回答正确！';
-  } else {
-    state.session.wrong.push({ q, your: selected });
-    feedback.className = 'feedback wrong';
-    let hint = '';
-    if (q.type === 'multiple') {
-      const missing = q.answer.filter(i => !selectedSet.has(i));
-      const extra = selected.filter(i => !correctSet.has(i));
-      hint = '（' + (missing.length ? '漏选 ' + missing.map(i => OPT_KEYS[i]).join('') : '') +
-             (extra.length ? (missing.length ? '，' : '') + '多选 ' + extra.map(i => OPT_KEYS[i]).join('') : '') + '）';
-    }
-    feedback.innerHTML = `❌ 回答错误，正确答案：<b>${answerTextWithContent(q)}</b> ${hint}`;
-  }
-  if (q.explanation) {
-    feedback.innerHTML += `<div class="explain"><b>解析：</b>${escapeHtml(q.explanation)}</div>`;
-  }
-
-  $('#btnConfirm').hidden = true;
-  const nextBtn = $('#btnNext');
-  nextBtn.hidden = false;
-  nextBtn.textContent = state.session.index === state.session.questions.length - 1 ? '查看结果 🎉' : '下一题 →';
+  const r = currentRecord();
+  if (r.selected !== null || r.skipped) return;
+  r.selected = selected;
+  renderQuestion();
 }
 
 $('#btnNext').addEventListener('click', () => {
@@ -811,31 +864,53 @@ function showResult() {
   resultEl.classList.remove('hidden');
 
   const total = s.questions.length;
-  const right = s.rightCount;
+  const perType = { single: { total: 0, right: 0 }, multiple: { total: 0, right: 0 }, judge: { total: 0, right: 0 } };
+  const wrongItems = [];
+  let right = 0;
+  s.questions.forEach((q, i) => {
+    perType[q.type].total++;
+    if (recordIsRight(q, s.records[i])) {
+      perType[q.type].right++;
+      right++;
+    } else {
+      wrongItems.push({ q, r: s.records[i] });
+    }
+  });
   const accuracy = total ? Math.round(right / total * 100) : 0;
 
   $('#resultScore').innerHTML = `${right} <small>/ ${total} 题 · 正确率 ${accuracy}%</small>`;
   $('#resultStats').innerHTML = ['single', 'multiple', 'judge'].map(t => {
-    const p = s.perType[t];
+    const p = perType[t];
     return `<div class="stat"><div class="num">${p.right}/${p.total}</div><div class="label">${TYPE_LABEL[t]}</div></div>`;
   }).join('');
 
   const wrongEl = $('#resultWrong');
-  if (!s.wrong.length) {
+  if (!wrongItems.length) {
     wrongEl.innerHTML = '<div class="empty">全部答对，太棒了！🎉</div>';
   } else {
-    wrongEl.innerHTML = `<h3>错题回顾（${s.wrong.length} 题）</h3>` + s.wrong.map((w, i) => `
-      <div class="wr-item ${w.q.verified ? '' : 'unverified'}">
-        <div class="q-meta">${typeBadge(w.q.type)} ${sourceBadges(w.q)}</div>
-        <div class="wr-stem">${i + 1}. ${escapeHtml(w.q.stem)}</div>
+    wrongEl.innerHTML = `<h3>错题回顾（${wrongItems.length} 题）</h3>` + wrongItems.map(({ q, r }, i) => {
+      let yourText;
+      if (r.skipped) {
+        yourText = '不清楚';
+      } else if (r.selected && r.selected.length) {
+        yourText = q.type === 'judge'
+          ? (r.selected[0] === 0 ? '正确' : '错误')
+          : r.selected.map(x => `${OPT_KEYS[x]}.${q.options[x] || ''}`).join('、');
+      } else {
+        yourText = '（未选）';
+      }
+      const guessedTag = r.guessed ? '（我蒙的）' : '';
+      return `
+      <div class="wr-item ${q.verified ? '' : 'unverified'}">
+        <div class="q-meta">${typeBadge(q.type)} ${sourceBadges(q)}</div>
+        <div class="wr-stem">${i + 1}. ${escapeHtml(q.stem)}</div>
         <div class="wr-detail">
-          ${w.q.type === 'judge'
-            ? `你的答案：${w.your[0] === 0 ? '正确' : '错误'}`
-            : `你的答案：${w.your.map(x => OPT_KEYS[x]).join('') || '（未选）'}`}
-          ｜ 正确答案：<b style="color:#16a34a">${answerText(w.q)}</b>
-          ${w.q.explanation ? '<br>解析：' + escapeHtml(w.q.explanation) : ''}
+          你的答案：${escapeHtml(yourText)}${guessedTag}
+          ｜ 正确答案：<b style="color:#16a34a">${answerTextWithContent(q)}</b>
+          ${q.explanation ? '<br>解析：' + escapeHtml(q.explanation) : ''}
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 }
 

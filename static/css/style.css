@@ -99,6 +99,8 @@ body:not(.static-mode) .static-only { display: none !important; }
 .btn.primary:hover { background: var(--primary-dark); }
 .btn.danger { background: #fff; border-color: #fecaca; color: var(--red); }
 .btn.danger:hover { background: var(--red-bg); }
+.btn.warn { background: #fff; border-color: #fde68a; color: var(--amber); }
+.btn.warn:hover { background: #fffbeb; }
 .btn.big { font-size: 18px; padding: 12px 34px; }
 .btn.small { padding: 5px 12px; font-size: 13px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
