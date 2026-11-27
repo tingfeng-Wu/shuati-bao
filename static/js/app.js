@@ -705,6 +705,7 @@ function beginYihunPractice(ids) {
   const questions = shuffleCopy(pool).map(examQuestionCopy);
   state.session = {
     exam: false,
+    yihun: true,
     questions,
     index: 0,
     scope: 'all',
@@ -716,6 +717,21 @@ function beginYihunPractice(ids) {
   window.scrollTo(0, 0);
   renderQuestion();
 }
+
+// 做题时把当前题加入易混题单（乱序/顺序/考试模式可用；刷易混模式本身不显示）
+$('#btnAddYihun').addEventListener('click', () => {
+  if (!state.currentCourseId) return toast('请先选择题库');
+  const q = currentQuestion();
+  if (!q || !q.id) return toast('当前题目缺少编号，无法加入');
+  const ids = loadYihun(state.currentCourseId);
+  if (ids.includes(q.id)) {
+    toast('该题已加入');
+  } else {
+    ids.push(q.id);
+    saveYihun(state.currentCourseId, ids);
+    toast('加入成功');
+  }
+});
 
 async function openYihunModal(mode) {
   yihunModalMode = mode;
@@ -1012,6 +1028,7 @@ function updateQuizButtons(q, r, answered) {
   const s = state.session;
   $('#btnSheet').hidden = true;
   $('#btnSubmitExam').hidden = true;
+  $('#btnAddYihun').hidden = !!s.yihun;
   $('#btnPrev').hidden = s.index === 0;
   if (answered) {
     $('#btnSkip').hidden = true;
@@ -1162,6 +1179,7 @@ function updateExamButtons() {
   $('#btnSkip').hidden = true;
   $('#btnConfirm').hidden = true;
   $('#btnGuessed').hidden = true;
+  $('#btnAddYihun').hidden = false;
   $('#btnSheet').hidden = false;
   $('#btnSubmitExam').hidden = false;
   $('#btnPrev').hidden = s.index === 0;
