@@ -670,7 +670,7 @@ $('#btnSaveEdit').addEventListener('click', async () => {
 });
 
 /* ========== 刷易混 ========== */
-const YIHUN_KEY = 'shuatibao-yihun-';
+const YIHUN_KEY = 'shuatibao-yihun-v2-';
 let yihunAllQuestions = [];
 let yihunSelected = [];
 let yihunModalMode = 'start';
@@ -684,6 +684,11 @@ function loadYihun(courseId) {
 
 function saveYihun(courseId, ids) {
   localStorage.setItem(YIHUN_KEY + courseId, JSON.stringify(ids));
+}
+
+function isYihunQuestion(q) {
+  if (!q || !q.id || !state.currentCourseId) return false;
+  return loadYihun(state.currentCourseId).includes(q.id);
 }
 
 function startYihun() {
@@ -729,7 +734,25 @@ $('#btnAddYihun').addEventListener('click', () => {
   } else {
     ids.push(q.id);
     saveYihun(state.currentCourseId, ids);
+    $('#quizYihunBadge').classList.toggle('hidden', !isYihunQuestion(q));
     toast('加入成功');
+  }
+});
+
+// 从易混题单中删除当前题
+$('#btnRemoveYihun').addEventListener('click', () => {
+  if (!state.currentCourseId) return toast('请先选择题库');
+  const q = currentQuestion();
+  if (!q || !q.id) return toast('当前题目缺少编号，无法删除');
+  const ids = loadYihun(state.currentCourseId);
+  const idx = ids.indexOf(q.id);
+  if (idx === -1) {
+    toast('该题不在易混中');
+  } else {
+    ids.splice(idx, 1);
+    saveYihun(state.currentCourseId, ids);
+    $('#quizYihunBadge').classList.toggle('hidden', !isYihunQuestion(q));
+    toast('已从易混中删除');
   }
 });
 
@@ -1028,7 +1051,7 @@ function updateQuizButtons(q, r, answered) {
   const s = state.session;
   $('#btnSheet').hidden = true;
   $('#btnSubmitExam').hidden = true;
-  $('#btnAddYihun').hidden = !!s.yihun;
+  $('#quizYihunActions').classList.toggle('hidden', !!s.yihun);
   $('#btnPrev').hidden = s.index === 0;
   if (answered) {
     $('#btnSkip').hidden = true;
@@ -1062,6 +1085,7 @@ function renderQuestion() {
   note.className = info.cls;
   note.textContent = info.text;
 
+  $('#quizYihunBadge').classList.toggle('hidden', !isYihunQuestion(q));
   $('#quizStem').className = 'stem' + (q.verified ? '' : ' unverified-stem');
   let stem = `${s.index + 1}. ` + escapeHtml(q.stem);
   if (q.type === 'multiple') stem += '<span class="hint" style="display:inline-block;margin-left:8px">（多选题）</span>';
@@ -1130,6 +1154,7 @@ function renderExamQuestion() {
   note.className = 'source-note hidden';
   note.textContent = '';
 
+  $('#quizYihunBadge').classList.toggle('hidden', !isYihunQuestion(q));
   $('#quizStem').className = 'stem';
   let stem = `${s.index + 1}. ` + escapeHtml(q.stem);
   if (q.type === 'multiple') stem += '<span class="hint" style="display:inline-block;margin-left:8px">（多选题）</span>';
@@ -1179,7 +1204,7 @@ function updateExamButtons() {
   $('#btnSkip').hidden = true;
   $('#btnConfirm').hidden = true;
   $('#btnGuessed').hidden = true;
-  $('#btnAddYihun').hidden = false;
+  $('#quizYihunActions').classList.toggle('hidden', false);
   $('#btnSheet').hidden = false;
   $('#btnSubmitExam').hidden = false;
   $('#btnPrev').hidden = s.index === 0;
