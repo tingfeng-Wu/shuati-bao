@@ -1,5 +1,5 @@
 /* 刷题宝静态版 Service Worker（由 build_static.py 生成） */
-const CACHE = 'shuatibao-cb26658b8f';
+const CACHE = 'shuatibao-e2902a3577';
 const BASE = self.location.href.replace(/sw\.js.*$/, '');
 const ASSETS = [
   '', 'index.html', 'manifest.webmanifest',

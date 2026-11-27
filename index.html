@@ -290,6 +290,17 @@
           <button class="btn small" id="btnYihunNone">全不选</button>
           <span class="muted yihun-count" id="yihunCount"></span>
         </div>
+        <details class="yihun-io">
+          <summary>📤 导出 / 📥 导入题单（换设备同步 · 备份）</summary>
+          <div class="yihun-io-body">
+            <p class="sub">易混题单只存在当前设备里，换手机/电脑不会自动同步。在旧设备点「导出」复制代码，到新设备粘贴后点「导入」即可同步；代码也可留作备份，防止误清浏览器后丢失。</p>
+            <textarea id="yihunIO" rows="4" placeholder="粘贴题单代码到这里…"></textarea>
+            <div class="row yihun-io-actions">
+              <button class="btn small" id="btnYihunExport">📤 导出并复制</button>
+              <button class="btn small primary" id="btnYihunImport">📥 导入</button>
+            </div>
+          </div>
+        </details>
         <div id="yihunList" class="yihun-list"></div>
       </div>
       <div class="modal-footer">

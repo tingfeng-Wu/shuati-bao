@@ -846,6 +846,49 @@ $('#btnSaveYihun').addEventListener('click', () => {
   }
 });
 
+// 导出：把当前勾选的易混题打包成可复制代码（跨设备同步 + 备份）
+$('#btnYihunExport').addEventListener('click', async () => {
+  if (!yihunSelected.length) return toast('当前题单为空，没有可导出的题');
+  const code = JSON.stringify({ v: 1, course: state.currentCourseId, ids: yihunSelected });
+  const box = $('#yihunIO');
+  box.value = code;
+  box.focus();
+  box.select();
+  let copied = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(code); copied = true; } catch (e) {}
+  }
+  toast(copied ? '已复制题单代码，到另一台设备粘贴后点「导入」即可' : '代码已生成，请手动全选复制');
+});
+
+// 导入：粘贴代码恢复/合并题单（合并去重，不会丢已有题）
+$('#btnYihunImport').addEventListener('click', () => {
+  const raw = ($('#yihunIO').value || '').trim();
+  if (!raw) return toast('请先粘贴题单代码');
+  let ids = null;
+  let srcCourse = null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) ids = parsed;
+    else if (parsed && Array.isArray(parsed.ids)) { ids = parsed.ids; srcCourse = parsed.course; }
+  } catch (e) {}
+  if (!ids) return toast('代码格式不正确，请重新复制导出内容');
+  const validIds = new Set(yihunAllQuestions.map(q => q.id));
+  const clean = ids.filter(id => validIds.has(id));
+  if (!clean.length) {
+    if (srcCourse && srcCourse !== state.currentCourseId) {
+      return toast('这段代码是其他课程的题单，请先切换到对应课程再导入');
+    }
+    return toast('代码里的题在当前课程中都不存在，未导入');
+  }
+  const merged = Array.from(new Set([...yihunSelected, ...clean]));
+  const added = merged.length - yihunSelected.length;
+  yihunSelected = merged;
+  saveYihun(state.currentCourseId, yihunSelected);
+  renderYihunList($('#yihunSearch').value);
+  toast('已导入，题单现有 ' + merged.length + ' 题' + (added ? '（新增 ' + added + ' 题）' : '（全部已存在）'));
+});
+
 /* ========== 刷题 ========== */
 async function loadPracticeStart() {
   const start = $('#practiceStart'), quiz = $('#practiceQuiz'), result = $('#practiceResult');

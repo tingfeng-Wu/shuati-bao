@@ -725,6 +725,35 @@ body.static-mode .course-card .actions .btn { flex: 1; padding: 10px 14px; }
   color: var(--muted);
 }
 .yihun-opt { line-height: 1.6; word-break: break-word; }
+.yihun-io {
+  margin: 0 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  padding: 8px 12px;
+  background: #f8fafc;
+}
+.yihun-io summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  user-select: none;
+}
+.yihun-io-body { margin-top: 10px; }
+.yihun-io-body .sub { margin: 0 0 8px; font-size: 13px; }
+.yihun-io textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 72px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.yihun-io-actions { gap: 8px; margin-top: 8px; }
 
 @media (max-width: 600px) {
   html { -webkit-text-size-adjust: 100%; }
