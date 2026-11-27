@@ -669,6 +669,144 @@ $('#btnSaveEdit').addEventListener('click', async () => {
   }
 });
 
+/* ========== 刷易混 ========== */
+const YIHUN_KEY = 'shuatibao-yihun-';
+let yihunAllQuestions = [];
+let yihunSelected = [];
+let yihunModalMode = 'start';
+
+function loadYihun(courseId) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(YIHUN_KEY + courseId) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+function saveYihun(courseId, ids) {
+  localStorage.setItem(YIHUN_KEY + courseId, JSON.stringify(ids));
+}
+
+function startYihun() {
+  const ids = loadYihun(state.currentCourseId);
+  if (!ids.length) {
+    openYihunModal('start'); // 初次使用：弹出完整题单供勾选
+    return;
+  }
+  beginYihunPractice(ids);
+}
+
+function beginYihunPractice(ids) {
+  if (!ids.length) return toast('请至少勾选一道易混题');
+  const idSet = new Set(ids);
+  let pool = state.practiceQuestions.filter(q => idSet.has(q.id));
+  if (!pool.length) pool = yihunAllQuestions.filter(q => idSet.has(q.id));
+  if (!pool.length) return toast('易混题单为空或题目已变化，请重新勾选');
+  // 选项顺序打乱（判断题保持“正确/错误”固定顺序）
+  const questions = shuffleCopy(pool).map(examQuestionCopy);
+  state.session = {
+    exam: false,
+    questions,
+    index: 0,
+    scope: 'all',
+    records: questions.map(() => ({ selected: null, skipped: false, guessed: false })),
+  };
+  $('#practiceStart').classList.add('hidden');
+  $('#practiceResult').classList.add('hidden');
+  $('#practiceQuiz').classList.remove('hidden');
+  window.scrollTo(0, 0);
+  renderQuestion();
+}
+
+async function openYihunModal(mode) {
+  yihunModalMode = mode;
+  if (!state.currentCourseId) return toast('请先选择题库');
+  const data = await api('/api/courses/' + state.currentCourseId + '/questions');
+  yihunAllQuestions = data.questions || [];
+  yihunSelected = loadYihun(state.currentCourseId);
+  const validIds = new Set(yihunAllQuestions.map(q => q.id));
+  yihunSelected = yihunSelected.filter(id => validIds.has(id));
+  $('#yihunSearch').value = '';
+  renderYihunList('');
+  $('#btnSaveYihun').textContent = mode === 'start' ? '保存并开始' : '保存';
+  $('#yihunModal').classList.remove('hidden');
+}
+
+function yihunOptionsHtml(q) {
+  if (q.type === 'judge') return '';
+  return `<span class="yihun-opts">` +
+    q.options.map((o, i) => `<span class="yihun-opt">${OPT_KEYS[i]}. ${escapeHtml(o)}</span>`).join('') +
+    `</span>`;
+}
+
+function renderYihunList(filter) {
+  const kw = (filter || '').trim();
+  const sel = new Set(yihunSelected);
+  const list = yihunAllQuestions.filter(q => {
+    if (!kw) return true;
+    if ((q.stem || '').includes(kw)) return true;
+    return (q.options || []).some(o => (o || '').includes(kw));
+  });
+  if (!list.length) {
+    $('#yihunList').innerHTML = '<div class="empty">没有匹配的题目。</div>';
+  } else {
+    $('#yihunList').innerHTML = list.map((q) => {
+      const checked = sel.has(q.id);
+      return `
+      <label class="yihun-item ${checked ? 'checked' : ''}">
+        <input type="checkbox" data-id="${q.id}" ${checked ? 'checked' : ''} />
+        <span class="yihun-body">
+          <span class="yihun-head">
+            <span class="yihun-meta">${typeBadge(q.type)}</span>
+            <span class="yihun-stem">${escapeHtml(q.stem)}</span>
+          </span>
+          ${yihunOptionsHtml(q)}
+        </span>
+      </label>`;
+    }).join('');
+  }
+  const n = yihunSelected.length;
+  $('#yihunCount').textContent = `已选 ${n} / ${yihunAllQuestions.length} 题`;
+
+  $('#yihunList').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.id;
+      if (cb.checked) {
+        if (!yihunSelected.includes(id)) yihunSelected.push(id);
+      } else {
+        yihunSelected = yihunSelected.filter(x => x !== id);
+      }
+      cb.closest('.yihun-item').classList.toggle('checked', cb.checked);
+      $('#yihunCount').textContent = `已选 ${yihunSelected.length} / ${yihunAllQuestions.length} 题`;
+    });
+  });
+}
+
+$('#btnManageYihun').addEventListener('click', () => openYihunModal('manage'));
+$('#btnCloseYihun').addEventListener('click', () => $('#yihunModal').classList.add('hidden'));
+$('#btnCancelYihun').addEventListener('click', () => $('#yihunModal').classList.add('hidden'));
+$('#yihunSearch').addEventListener('input', () => renderYihunList($('#yihunSearch').value));
+
+$('#btnYihunAll').addEventListener('click', () => {
+  yihunSelected = yihunAllQuestions.map(q => q.id);
+  renderYihunList($('#yihunSearch').value);
+});
+$('#btnYihunNone').addEventListener('click', () => {
+  yihunSelected = [];
+  renderYihunList($('#yihunSearch').value);
+});
+
+$('#btnSaveYihun').addEventListener('click', () => {
+  saveYihun(state.currentCourseId, yihunSelected);
+  $('#yihunModal').classList.add('hidden');
+  const mode = yihunModalMode;
+  if (mode === 'start') {
+    beginYihunPractice(yihunSelected);
+  } else {
+    toast('易混题单已保存（' + yihunSelected.length + ' 题）');
+    updateExamInfo();
+  }
+});
+
 /* ========== 刷题 ========== */
 async function loadPracticeStart() {
   const start = $('#practiceStart'), quiz = $('#practiceQuiz'), result = $('#practiceResult');
@@ -724,9 +862,22 @@ function updateExamInfo() {
   const modeChecked = document.querySelector('input[name="practiceMode"]:checked');
   const scopeChecked = document.querySelector('input[name="practiceScope"]:checked');
   const scope = scopeChecked ? scopeChecked.value : 'all';
-  const isExam = modeChecked && modeChecked.value === 'exam';
-  $('#btnStartPractice').textContent = isExam ? '开始考试' : '开始刷题';
-  $('#practiceTitle').textContent = isExam ? '模拟考试' : '开始刷题';
+  const mode = modeChecked ? modeChecked.value : 'shuffle';
+  const isExam = mode === 'exam';
+  const isYihun = mode === 'yihun';
+  $('#btnStartPractice').textContent = isExam ? '开始考试' : isYihun ? '开始刷易混' : '开始刷题';
+  $('#practiceTitle').textContent = isExam ? '模拟考试' : isYihun ? '刷易混' : '开始刷题';
+  $('#yihunBar').classList.toggle('hidden', !isYihun);
+
+  if (isYihun) {
+    const n = loadYihun(state.currentCourseId).length;
+    info.classList.remove('hidden');
+    info.innerHTML = n
+      ? `已勾选 <b>${n}</b> 道易混题；开始后只练这些题，选项顺序打乱。`
+      : `尚未勾选易混题。点「开始刷易混」会先弹出完整题单供你勾选。`;
+    return;
+  }
+
   if (!isExam || !state.practiceQuestions.length) {
     info.classList.add('hidden');
     return;
@@ -764,6 +915,11 @@ $('#btnStartPractice').addEventListener('click', async () => {
   const scopeChecked = document.querySelector('input[name="practiceScope"]:checked');
   const scope = scopeChecked ? scopeChecked.value : 'all';
 
+  if (mode === 'yihun') {
+    startYihun();
+    return;
+  }
+
   if (mode === 'exam') {
     startExam(scope);
     return;
@@ -774,12 +930,14 @@ $('#btnStartPractice').addEventListener('click', async () => {
     return toast(scope === 'verified' ? '该课程没有学习通已确认的题目'
       : scope === 'unverified' ? '该课程没有仅题库的题目' : '题库为空');
   }
+  // 乱序模式：题目顺序已打乱，这里再把每题的选项顺序也打乱（判断题保持“正确/错误”固定顺序）
+  const questions = mode === 'shuffle' ? data.questions.map(examQuestionCopy) : data.questions;
   state.session = {
     exam: false,
-    questions: data.questions,
+    questions,
     index: 0,
     scope,
-    records: data.questions.map(() => ({ selected: null, skipped: false, guessed: false })),
+    records: questions.map(() => ({ selected: null, skipped: false, guessed: false })),
   };
   $('#practiceStart').classList.add('hidden');
   $('#practiceResult').classList.add('hidden');

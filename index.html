@@ -143,12 +143,12 @@
           </div>
         </div>
 
-        <h3 class="pick-title">出题顺序</h3>
+        <h3 class="pick-title">刷题模式</h3>
         <div class="mode-picker">
           <label class="mode-card">
             <input type="radio" name="practiceMode" value="shuffle" checked />
             <span class="mode-name">🔀 乱序模式</span>
-            <span class="mode-desc">单选 → 多选 → 判断，每类内部随机打乱</span>
+            <span class="mode-desc">单选 → 多选 → 判断，题目与选项顺序都打乱</span>
           </label>
           <label class="mode-card">
             <input type="radio" name="practiceMode" value="order" />
@@ -160,6 +160,15 @@
             <span class="mode-name">📝 模拟考试</span>
             <span class="mode-desc">随机抽题：单选 40 · 多选 20 · 判断 20，选项乱序</span>
           </label>
+          <label class="mode-card">
+            <input type="radio" name="practiceMode" value="yihun" />
+            <span class="mode-name">🧠 刷易混</span>
+            <span class="mode-desc">只练你勾选的易混题，选项顺序打乱</span>
+          </label>
+        </div>
+
+        <div id="yihunBar" class="yihun-bar hidden">
+          <button class="btn" id="btnManageYihun">🧠 管理易混题单</button>
         </div>
 
         <div id="examInfo" class="exam-info hidden"></div>
@@ -257,6 +266,30 @@
       <div class="modal-footer">
         <button class="btn" id="btnResumeExam">继续答题</button>
         <button class="btn primary" id="btnSubmitSheet">交卷</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 易混题单弹窗 -->
+  <div id="yihunModal" class="modal hidden">
+    <div class="modal-content yihun-modal">
+      <div class="modal-header">
+        <h2>🧠 勾选易混题</h2>
+        <button class="modal-close" id="btnCloseYihun">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="sub">勾选你容易做错 / 容易混淆的题，之后「刷易混」只练这些题，选项顺序会打乱。</p>
+        <div class="yihun-toolbar">
+          <input type="text" id="yihunSearch" placeholder="🔍 搜索题干，快速定位…" />
+          <button class="btn small" id="btnYihunAll">全选</button>
+          <button class="btn small" id="btnYihunNone">全不选</button>
+          <span class="muted yihun-count" id="yihunCount"></span>
+        </div>
+        <div id="yihunList" class="yihun-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelYihun">取消</button>
+        <button class="btn primary" id="btnSaveYihun">保存</button>
       </div>
     </div>
   </div>
